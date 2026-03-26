@@ -108,6 +108,7 @@ See `example/lib/main.dart` for a simple UI:
 - Kotlin-based monitor and optional foreground service with structured callbacks instead of UI-bound logic.
 - Strongly typed Dart API/models, formatting helpers, and unit tests for core utilities.
 - Configurable interval and notification metadata provided from Flutter rather than hard-coded.
+- Conceptually informed by TrafficStats-based monitoring in https://github.com/thanush0/InternetSpeedMeter, but fully refactored into plugin architecture with new code.
 
 ## Commands
 - Create/update dependencies: `flutter pub get`
