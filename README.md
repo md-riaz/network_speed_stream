@@ -22,7 +22,7 @@ dependencies:
 
 ## Android setup
 - Minimum SDK: 21 (Lollipop). TrafficStats is available earlier; 21 is a modern floor and matches current Flutter defaults.
-- Compile/target SDK: 34.
+- Compile/target SDK: 35 (Android 15 ready).
 - Required permissions in your app manifest (plugin declares them, but you may prefer to own them):
   ```xml
   <uses-permission android:name="android.permission.INTERNET" />

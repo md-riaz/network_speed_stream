@@ -24,12 +24,12 @@ apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
 android {
-    compileSdkVersion 34
+    compileSdkVersion 35
     namespace 'com.networkspeedmeter.network_speed_meter'
 
     defaultConfig {
         minSdkVersion 21
-        targetSdkVersion 34
+        targetSdkVersion 35
         consumerProguardFiles 'consumer-rules.pro'
     }
 
