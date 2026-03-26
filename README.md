@@ -116,3 +116,45 @@ Run it from `example/` with `flutter run -d android`.
 - Create/update dependencies: `flutter pub get`
 - Run tests: `flutter test`
 - Run example (Android): `flutter run -d android` from `example/`
+- Build debug APK: `flutter build apk --debug` from `example/` (automatically signed, can be installed)
+- Build release APK: Configure signing in `example/android/app/build.gradle` first, then `flutter build apk --release`
+
+## Building installable APKs
+
+The example app can be built as an APK for installation on Android devices:
+
+### Debug builds (recommended for testing)
+Debug APKs are automatically signed with a debug keystore and can be installed directly:
+```bash
+cd example
+flutter build apk --debug
+```
+The APK will be at `example/build/app/outputs/flutter-apk/app-debug.apk`.
+
+### Release builds (for production)
+Release APKs require signing configuration. Add to `example/android/app/build.gradle`:
+```gradle
+android {
+    signingConfigs {
+        release {
+            storeFile file(System.getenv("KEYSTORE_FILE") ?: "release-keystore.jks")
+            storePassword System.getenv("KEYSTORE_PASSWORD")
+            keyAlias System.getenv("KEY_ALIAS")
+            keyPassword System.getenv("KEY_PASSWORD")
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+        }
+    }
+}
+```
+Then build:
+```bash
+cd example
+flutter build apk --release
+```
+
+**Note**: The GitHub Actions workflow builds debug APKs to ensure they can be installed without additional signing setup.
+

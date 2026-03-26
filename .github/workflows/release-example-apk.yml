@@ -38,12 +38,14 @@ jobs:
 
       - name: Build example APK
         working-directory: example
-        run: flutter build apk --release
+        # Build debug APK which is automatically signed with debug keystore and can be installed.
+        # For production apps, configure signing in build.gradle and use --release instead.
+        run: flutter build apk --debug
 
       - name: Prepare artifact
         run: |
-          APK_PATH="example/build/app/outputs/flutter-apk/app-release.apk"
-          RELEASE_NAME="network_speed_meter_example-${{ inputs.version }}.apk"
+          APK_PATH="example/build/app/outputs/flutter-apk/app-debug.apk"
+          RELEASE_NAME="network_speed_meter_example-${{ inputs.version }}-debug.apk"
           cp "$APK_PATH" "example/build/app/outputs/flutter-apk/$RELEASE_NAME"
           echo "apk_path=example/build/app/outputs/flutter-apk/$RELEASE_NAME" >> "$GITHUB_OUTPUT"
         id: artifact
