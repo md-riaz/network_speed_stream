@@ -87,5 +87,8 @@ class MethodChannelNetworkSpeedMeter extends NetworkSpeedMeterPlatform {
 }
 
 // Register the default instance when this library is loaded.
-final NetworkSpeedMeterPlatform _defaultInstance =
-    NetworkSpeedMeterPlatform.instance = MethodChannelNetworkSpeedMeter();
+void _registerDefaultInstance() {
+  NetworkSpeedMeterPlatform.instance = MethodChannelNetworkSpeedMeter();
+}
+
+final _defaultRegistration = _registerDefaultInstance();

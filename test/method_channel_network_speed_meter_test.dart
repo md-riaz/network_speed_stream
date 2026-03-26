@@ -25,6 +25,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('default instance is MethodChannelNetworkSpeedMeter', () {
+    // Access the public singleton to ensure the default instance is registered.
+    networkSpeedMeter;
     expect(
       NetworkSpeedMeterPlatform.instance,
       isA<MethodChannelNetworkSpeedMeter>(),

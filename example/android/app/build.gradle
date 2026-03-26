@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId "com.networkspeedmeter.example"
-        minSdkVersion 21
+        minSdkVersion flutter.minSdkVersion
         targetSdkVersion 34
         versionCode 1
         versionName "1.0"

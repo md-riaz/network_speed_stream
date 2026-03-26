@@ -10,7 +10,7 @@ class NetworkSpeedConfig {
     this.showNotification = true,
     this.notificationTitle = 'Network speed monitor',
     this.notificationContent = 'Monitoring traffic in the background',
-  }) : assert(interval.inMilliseconds > 0, 'Interval must be positive');
+  });
 
   /// Interval between TrafficStats samples.
   final Duration interval;
