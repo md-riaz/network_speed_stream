@@ -2,8 +2,10 @@ package com.networkspeedmeter.network_speed_meter
 
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Context.RECEIVER_NOT_EXPORTED
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
@@ -196,7 +198,11 @@ class NetworkSpeedMeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
             addAction(NetworkSpeedForegroundService.ACTION_BROADCAST)
             addAction(NetworkSpeedForegroundService.ACTION_ERROR)
         }
-        context.registerReceiver(serviceReceiver, filter)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(serviceReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(serviceReceiver, filter)
+        }
     }
 
     private fun unregisterServiceReceiver() {

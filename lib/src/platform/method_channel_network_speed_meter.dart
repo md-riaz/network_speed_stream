@@ -76,11 +76,6 @@ class MethodChannelNetworkSpeedMeter extends NetworkSpeedMeterPlatform {
         return NetworkSpeedSnapshot.fromMap(event);
       }
       throw NetworkSpeedException('Received malformed speed event');
-    }).handleError((error, stackTrace) {
-      if (kDebugMode) {
-        // ignore: avoid_print
-        print('NetworkSpeedMeter stream error: $error');
-      }
     }).asBroadcastStream();
     return _stream!;
   }
