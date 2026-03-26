@@ -1,6 +1,6 @@
 name: network_speed_meter
 description: Flutter plugin for real-time Android network speed monitoring using TrafficStats with optional foreground service updates.
-version: 0.1.0
+version: 0.1.1
 homepage: https://github.com/md-riaz/network_speed_stream
 publish_to: "none"
 
