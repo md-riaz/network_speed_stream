@@ -79,11 +79,13 @@ speedFormatter.format(5 * 1024 * 1024); // "5.0 MB/s"
 ```
 
 ## Example app
-See `example/lib/main.dart` for a simple UI:
-- Interval input
-- Foreground service toggle
-- Start/stop buttons
-- Live download/upload/total values and log view
+`example/lib/main.dart` mirrors the Play Store reference app with four tabs:
+- Dashboard: live download/upload/total cards, chart, controls, session stats
+- Usage: daily counters, session usage, peaks, notification preview
+- History: per-session archive with averages and peaks
+- Settings: interval, auto-start, foreground/notification toggles and demo reset
+
+Run it from `example/` with `flutter run -d android`.
 
 ## Testing
 - Dart unit tests: `flutter test` (formatter, config validation, platform wiring)
