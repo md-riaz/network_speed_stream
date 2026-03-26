@@ -1,0 +1,21 @@
+name: network_speed_meter_example
+description: Example app for the network_speed_meter plugin.
+publish_to: "none"
+
+environment:
+  sdk: ">=3.2.0 <4.0.0"
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  network_speed_meter:
+    path: ..
+
+dev_dependencies:
+  flutter_lints: ^3.0.1
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
