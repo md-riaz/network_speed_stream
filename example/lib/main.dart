@@ -67,6 +67,9 @@ class NetworkSpeedMeterDemoApp extends StatefulWidget {
 }
 
 class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
+  static const _startupCheckTimeout = Duration(seconds: 2);
+  static const _startupCheckPollStep = Duration(milliseconds: 100);
+
   final _eventLog = <String>[];
   final _chartSamples = <SpeedSample>[];
   final _history = <SessionSummary>[];
@@ -88,6 +91,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
   int _sessionUploadBytes = 0;
   int _peakDownloadBps = 0;
   int _peakUploadBps = 0;
+  int _chartVersion = 0;
 
   @override
   void initState() {
@@ -151,31 +155,88 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
     });
   }
 
+  Future<void> _cancelSubscription() async {
+    await _subscription?.cancel();
+    _subscription = null;
+  }
+
+  Future<bool> _waitUntilMonitoring() async {
+    final deadline = DateTime.now().add(_startupCheckTimeout);
+    while (DateTime.now().isBefore(deadline)) {
+      if (await networkSpeedMeter.isMonitoring) {
+        return true;
+      }
+      await Future<void>.delayed(_startupCheckPollStep);
+    }
+    return networkSpeedMeter.isMonitoring;
+  }
+
   Future<void> _startMonitoring() async {
     if (_isMonitoring) return;
-    final config = NetworkSpeedConfig(
-      interval: Duration(milliseconds: _intervalMs),
-      enableForegroundService: _foreground,
-      showNotification: _showNotification,
-      notificationTitle: 'Network speed meter',
-      notificationContent: _foreground
-          ? 'Foreground service active'
-          : 'Monitoring while app is open',
-    );
-    await networkSpeedMeter.startMonitoring(config: config);
-    await _subscription?.cancel();
-    _subscription = networkSpeedMeter.speedStream.listen(_handleSnapshot);
-    setState(() {
-      _isMonitoring = true;
-      _sessionStartedAt = DateTime.now();
-    });
-    _log('Monitoring started (interval ${_intervalMs}ms)');
+
+    Future<bool> _startWithConfig(bool useForegroundService) async {
+      final config = NetworkSpeedConfig(
+        interval: Duration(milliseconds: _intervalMs),
+        enableForegroundService: useForegroundService,
+        showNotification: _showNotification,
+        notificationTitle: 'Network speed meter',
+        notificationContent: useForegroundService
+            ? 'Foreground service active'
+            : 'Monitoring while app is open',
+      );
+      await networkSpeedMeter.startMonitoring(config: config);
+      return _waitUntilMonitoring();
+    }
+
+    try {
+      var startedWithForeground = _foreground;
+      var started = await _startWithConfig(startedWithForeground);
+
+      if (!started && startedWithForeground) {
+        _log('Foreground mode unavailable, retrying in-app monitoring');
+        startedWithForeground = false;
+        started = await _startWithConfig(false);
+      }
+
+      if (!started) {
+        throw StateError(
+          'Monitoring failed to start after validation. '
+          'Check notification/service permissions and try again.',
+        );
+      }
+
+      await _cancelSubscription();
+      _subscription = networkSpeedMeter.speedStream.listen(
+        _handleSnapshot,
+        onError: (Object error) {
+          unawaited(_cancelSubscription());
+          if (!mounted) return;
+          setState(() {
+            _isMonitoring = false;
+          });
+          _log('Monitoring error: $error');
+        },
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isMonitoring = true;
+        _sessionStartedAt = DateTime.now();
+      });
+      _log('Monitoring started (interval ${_intervalMs}ms)');
+    } catch (error) {
+      await _cancelSubscription();
+      if (!mounted) return;
+      setState(() {
+        _isMonitoring = false;
+      });
+      _log('Failed to start monitoring: $error');
+    }
   }
 
   Future<void> _stopMonitoring() async {
     await networkSpeedMeter.stopMonitoring();
-    await _subscription?.cancel();
-    _subscription = null;
+    await _cancelSubscription();
     if (_sessionStartedAt != null) {
       _history.insert(
         0,
@@ -198,6 +259,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
       _peakUploadBps = 0;
       _latest = null;
       _chartSamples.clear();
+      _chartVersion = 0;
       _lastSampleAt = null;
     });
     _log('Monitoring stopped');
@@ -210,6 +272,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
       _peakDownloadBps = 0;
       _peakUploadBps = 0;
       _chartSamples.clear();
+      _chartVersion = 0;
       _latest = null;
       _eventLog.clear();
       _lastSampleAt = null;
@@ -253,6 +316,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
 
     setState(() {
       _latest = snapshot;
+      _chartVersion++;
     });
 
     _log(
@@ -350,7 +414,10 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
                 const SizedBox(height: 12),
                 SizedBox(
                   height: 180,
-                  child: SpeedChart(samples: _chartSamples),
+                  child: SpeedChart(
+                    samples: _chartSamples,
+                    version: _chartVersion,
+                  ),
                 ),
               ],
             ),
@@ -744,6 +811,11 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
         ),
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _currentTab,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.blueGrey.shade900,
+          selectedItemColor: Colors.white,
+          unselectedItemColor: Colors.blueGrey.shade200,
+          showUnselectedLabels: true,
           onTap: (index) => setState(() => _currentTab = index),
           items: const [
             BottomNavigationBarItem(
@@ -770,9 +842,14 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
 }
 
 class SpeedChart extends StatelessWidget {
-  const SpeedChart({super.key, required this.samples});
+  const SpeedChart({
+    super.key,
+    required this.samples,
+    required this.version,
+  });
 
   final List<SpeedSample> samples;
+  final int version;
 
   @override
   Widget build(BuildContext context) {
@@ -782,16 +859,17 @@ class SpeedChart extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: CustomPaint(
-        painter: _SpeedChartPainter(samples),
+        painter: _SpeedChartPainter(samples, version),
       ),
     );
   }
 }
 
 class _SpeedChartPainter extends CustomPainter {
-  _SpeedChartPainter(this.samples);
+  _SpeedChartPainter(this.samples, this.version);
 
   final List<SpeedSample> samples;
+  final int version;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -833,6 +911,6 @@ class _SpeedChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SpeedChartPainter oldDelegate) {
-    return oldDelegate.samples != samples;
+    return oldDelegate.version != version;
   }
 }
