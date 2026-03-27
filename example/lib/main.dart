@@ -67,7 +67,8 @@ class NetworkSpeedMeterDemoApp extends StatefulWidget {
 }
 
 class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
-  static const _startupCheckDelay = Duration(milliseconds: 250);
+  static const _startupCheckTimeout = Duration(seconds: 2);
+  static const _startupCheckPollStep = Duration(milliseconds: 100);
 
   final _eventLog = <String>[];
   final _chartSamples = <SpeedSample>[];
@@ -154,6 +155,22 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
     });
   }
 
+  Future<void> _cancelSubscription() async {
+    await _subscription?.cancel();
+    _subscription = null;
+  }
+
+  Future<bool> _waitUntilMonitoring() async {
+    final deadline = DateTime.now().add(_startupCheckTimeout);
+    while (DateTime.now().isBefore(deadline)) {
+      if (await networkSpeedMeter.isMonitoring) {
+        return true;
+      }
+      await Future<void>.delayed(_startupCheckPollStep);
+    }
+    return networkSpeedMeter.isMonitoring;
+  }
+
   Future<void> _startMonitoring() async {
     if (_isMonitoring) return;
 
@@ -168,21 +185,8 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
             : 'Monitoring while app is open',
       );
       await networkSpeedMeter.startMonitoring(config: config);
-      await Future<void>.delayed(_startupCheckDelay);
-      return networkSpeedMeter.isMonitoring;
+      return _waitUntilMonitoring();
     }
-
-    await _subscription?.cancel();
-    _subscription = networkSpeedMeter.speedStream.listen(
-      _handleSnapshot,
-      onError: (Object error) {
-        if (!mounted) return;
-        setState(() {
-          _isMonitoring = false;
-        });
-        _log('Monitoring error: $error');
-      },
-    );
 
     try {
       var startedWithForeground = _foreground;
@@ -201,6 +205,19 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
         );
       }
 
+      await _cancelSubscription();
+      _subscription = networkSpeedMeter.speedStream.listen(
+        _handleSnapshot,
+        onError: (Object error) {
+          unawaited(_cancelSubscription());
+          if (!mounted) return;
+          setState(() {
+            _isMonitoring = false;
+          });
+          _log('Monitoring error: $error');
+        },
+      );
+
       if (!mounted) return;
       setState(() {
         _isMonitoring = true;
@@ -208,8 +225,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
       });
       _log('Monitoring started (interval ${_intervalMs}ms)');
     } catch (error) {
-      await _subscription?.cancel();
-      _subscription = null;
+      await _cancelSubscription();
       if (!mounted) return;
       setState(() {
         _isMonitoring = false;
@@ -220,8 +236,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
 
   Future<void> _stopMonitoring() async {
     await networkSpeedMeter.stopMonitoring();
-    await _subscription?.cancel();
-    _subscription = null;
+    await _cancelSubscription();
     if (_sessionStartedAt != null) {
       _history.insert(
         0,
