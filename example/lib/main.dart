@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:network_speed_meter/network_speed_meter.dart';
 
@@ -153,23 +154,64 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
 
   Future<void> _startMonitoring() async {
     if (_isMonitoring) return;
-    final config = NetworkSpeedConfig(
-      interval: Duration(milliseconds: _intervalMs),
-      enableForegroundService: _foreground,
-      showNotification: _showNotification,
-      notificationTitle: 'Network speed meter',
-      notificationContent: _foreground
-          ? 'Foreground service active'
-          : 'Monitoring while app is open',
-    );
-    await networkSpeedMeter.startMonitoring(config: config);
+
+    Future<bool> startWithConfig(bool useForegroundService) async {
+      final config = NetworkSpeedConfig(
+        interval: Duration(milliseconds: _intervalMs),
+        enableForegroundService: useForegroundService,
+        showNotification: _showNotification,
+        notificationTitle: 'Network speed meter',
+        notificationContent: useForegroundService
+            ? 'Foreground service active'
+            : 'Monitoring while app is open',
+      );
+      await networkSpeedMeter.startMonitoring(config: config);
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      return networkSpeedMeter.isMonitoring;
+    }
+
     await _subscription?.cancel();
-    _subscription = networkSpeedMeter.speedStream.listen(_handleSnapshot);
-    setState(() {
-      _isMonitoring = true;
-      _sessionStartedAt = DateTime.now();
-    });
-    _log('Monitoring started (interval ${_intervalMs}ms)');
+    _subscription = networkSpeedMeter.speedStream.listen(
+      _handleSnapshot,
+      onError: (Object error) {
+        if (!mounted) return;
+        setState(() {
+          _isMonitoring = false;
+        });
+        _log('Monitoring error: $error');
+      },
+    );
+
+    try {
+      var startedWithForeground = _foreground;
+      var started = await startWithConfig(startedWithForeground);
+
+      if (!started && startedWithForeground) {
+        _log('Foreground mode unavailable, retrying in-app monitoring');
+        startedWithForeground = false;
+        started = await startWithConfig(false);
+      }
+
+      if (!started) {
+        throw StateError('Monitoring service did not start.');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _isMonitoring = true;
+        _foreground = startedWithForeground;
+        _sessionStartedAt = DateTime.now();
+      });
+      _log('Monitoring started (interval ${_intervalMs}ms)');
+    } catch (error) {
+      await _subscription?.cancel();
+      _subscription = null;
+      if (!mounted) return;
+      setState(() {
+        _isMonitoring = false;
+      });
+      _log('Failed to start monitoring: $error');
+    }
   }
 
   Future<void> _stopMonitoring() async {
@@ -744,6 +786,11 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
         ),
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _currentTab,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.blueGrey.shade900,
+          selectedItemColor: Colors.white,
+          unselectedItemColor: Colors.blueGrey.shade200,
+          showUnselectedLabels: true,
           onTap: (index) => setState(() => _currentTab = index),
           items: const [
             BottomNavigationBarItem(
@@ -782,7 +829,7 @@ class SpeedChart extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: CustomPaint(
-        painter: _SpeedChartPainter(samples),
+        painter: _SpeedChartPainter(List<SpeedSample>.unmodifiable(samples)),
       ),
     );
   }
@@ -833,6 +880,6 @@ class _SpeedChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SpeedChartPainter oldDelegate) {
-    return oldDelegate.samples != samples;
+    return !listEquals(oldDelegate.samples, samples);
   }
 }
