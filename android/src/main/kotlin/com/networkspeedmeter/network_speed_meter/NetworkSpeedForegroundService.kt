@@ -161,7 +161,7 @@ private object ServiceInfoTypeHelper {
     fun supportsServiceType(): Boolean = Build.VERSION.SDK_INT >= 29
 
     fun serviceTypeDataSync(): Int {
-        return if (Build.VERSION.SDK_INT >= 29) {
+        return if (Build.VERSION.SDK_INT >= 34) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         } else {
             0

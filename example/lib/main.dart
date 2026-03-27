@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:network_speed_meter/network_speed_meter.dart';
 
@@ -68,6 +67,8 @@ class NetworkSpeedMeterDemoApp extends StatefulWidget {
 }
 
 class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
+  static const _startupCheckDelay = Duration(milliseconds: 250);
+
   final _eventLog = <String>[];
   final _chartSamples = <SpeedSample>[];
   final _history = <SessionSummary>[];
@@ -89,6 +90,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
   int _sessionUploadBytes = 0;
   int _peakDownloadBps = 0;
   int _peakUploadBps = 0;
+  int _chartVersion = 0;
 
   @override
   void initState() {
@@ -155,7 +157,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
   Future<void> _startMonitoring() async {
     if (_isMonitoring) return;
 
-    Future<bool> startWithConfig(bool useForegroundService) async {
+    Future<bool> _startWithConfig(bool useForegroundService) async {
       final config = NetworkSpeedConfig(
         interval: Duration(milliseconds: _intervalMs),
         enableForegroundService: useForegroundService,
@@ -166,7 +168,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
             : 'Monitoring while app is open',
       );
       await networkSpeedMeter.startMonitoring(config: config);
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(_startupCheckDelay);
       return networkSpeedMeter.isMonitoring;
     }
 
@@ -184,22 +186,24 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
 
     try {
       var startedWithForeground = _foreground;
-      var started = await startWithConfig(startedWithForeground);
+      var started = await _startWithConfig(startedWithForeground);
 
       if (!started && startedWithForeground) {
         _log('Foreground mode unavailable, retrying in-app monitoring');
         startedWithForeground = false;
-        started = await startWithConfig(false);
+        started = await _startWithConfig(false);
       }
 
       if (!started) {
-        throw StateError('Monitoring service did not start.');
+        throw StateError(
+          'Monitoring failed to start after validation. '
+          'Check notification/service permissions and try again.',
+        );
       }
 
       if (!mounted) return;
       setState(() {
         _isMonitoring = true;
-        _foreground = startedWithForeground;
         _sessionStartedAt = DateTime.now();
       });
       _log('Monitoring started (interval ${_intervalMs}ms)');
@@ -240,6 +244,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
       _peakUploadBps = 0;
       _latest = null;
       _chartSamples.clear();
+      _chartVersion = 0;
       _lastSampleAt = null;
     });
     _log('Monitoring stopped');
@@ -252,6 +257,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
       _peakDownloadBps = 0;
       _peakUploadBps = 0;
       _chartSamples.clear();
+      _chartVersion = 0;
       _latest = null;
       _eventLog.clear();
       _lastSampleAt = null;
@@ -295,6 +301,7 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
 
     setState(() {
       _latest = snapshot;
+      _chartVersion++;
     });
 
     _log(
@@ -392,7 +399,10 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
                 const SizedBox(height: 12),
                 SizedBox(
                   height: 180,
-                  child: SpeedChart(samples: _chartSamples),
+                  child: SpeedChart(
+                    samples: _chartSamples,
+                    version: _chartVersion,
+                  ),
                 ),
               ],
             ),
@@ -817,9 +827,14 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
 }
 
 class SpeedChart extends StatelessWidget {
-  const SpeedChart({super.key, required this.samples});
+  const SpeedChart({
+    super.key,
+    required this.samples,
+    required this.version,
+  });
 
   final List<SpeedSample> samples;
+  final int version;
 
   @override
   Widget build(BuildContext context) {
@@ -829,16 +844,17 @@ class SpeedChart extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: CustomPaint(
-        painter: _SpeedChartPainter(List<SpeedSample>.unmodifiable(samples)),
+        painter: _SpeedChartPainter(samples, version),
       ),
     );
   }
 }
 
 class _SpeedChartPainter extends CustomPainter {
-  _SpeedChartPainter(this.samples);
+  _SpeedChartPainter(this.samples, this.version);
 
   final List<SpeedSample> samples;
+  final int version;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -880,6 +896,6 @@ class _SpeedChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SpeedChartPainter oldDelegate) {
-    return !listEquals(oldDelegate.samples, samples);
+    return oldDelegate.version != version;
   }
 }
