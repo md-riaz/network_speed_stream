@@ -65,7 +65,7 @@ class NetworkSpeedMeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                     result.success(null)
                 } catch (exception: Exception) {
                     val details = exception.message
-                        ?: "${exception::class.java.simpleName} while starting monitor"
+                        ?: exception.javaClass.simpleName
                     result.error(
                         "start_monitoring_failed",
                         "Failed to start monitoring (${if (foreground) "foreground" else "in-app"} mode): $details",
