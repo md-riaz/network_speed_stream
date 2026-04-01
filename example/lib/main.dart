@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:network_speed_meter/network_speed_meter.dart';
 
 void main() {
@@ -69,6 +70,9 @@ class NetworkSpeedMeterDemoApp extends StatefulWidget {
 class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
   static const _startupCheckTimeout = Duration(seconds: 2);
   static const _startupCheckPollStep = Duration(milliseconds: 100);
+  static const _permissionChannel = MethodChannel(
+    'network_speed_meter_example/permissions',
+  );
 
   final _eventLog = <String>[];
   final _chartSamples = <SpeedSample>[];
@@ -174,11 +178,14 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
   Future<void> _startMonitoring() async {
     if (_isMonitoring) return;
 
-    Future<bool> _startWithConfig(bool useForegroundService) async {
+    Future<bool> _startWithConfig(
+      bool useForegroundService, {
+      required bool showNotification,
+    }) async {
       final config = NetworkSpeedConfig(
         interval: Duration(milliseconds: _intervalMs),
         enableForegroundService: useForegroundService,
-        showNotification: _showNotification,
+        showNotification: showNotification,
         notificationTitle: 'Network speed meter',
         notificationContent: useForegroundService
             ? 'Foreground service active'
@@ -189,14 +196,35 @@ class _NetworkSpeedMeterDemoAppState extends State<NetworkSpeedMeterDemoApp> {
     }
 
     try {
-      var startedWithForeground = _foreground;
-      var started = await _startWithConfig(startedWithForeground);
-
-      if (!started && startedWithForeground) {
-        _log('Foreground mode unavailable, retrying in-app monitoring');
-        startedWithForeground = false;
-        started = await _startWithConfig(false);
+      var effectiveShowNotification = _showNotification;
+      if (_foreground && _showNotification) {
+        final granted =
+            await _permissionChannel.invokeMethod<bool>(
+              'ensureNotificationPermission',
+            ) ??
+            false;
+        if (!granted) {
+          effectiveShowNotification = false;
+          _log(
+            'Notification permission denied; disabling foreground notification',
+          );
+        }
       }
+
+      var startedWithForeground = _foreground;
+      var started = await _startWithConfig(
+        startedWithForeground,
+        showNotification: effectiveShowNotification,
+      );
+
+        if (!started && startedWithForeground) {
+          _log('Foreground mode unavailable, retrying in-app monitoring');
+          startedWithForeground = false;
+          started = await _startWithConfig(
+            false,
+            showNotification: effectiveShowNotification,
+          );
+        }
 
       if (!started) {
         throw StateError(
