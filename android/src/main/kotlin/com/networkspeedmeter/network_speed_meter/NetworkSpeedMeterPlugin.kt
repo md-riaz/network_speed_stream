@@ -53,14 +53,22 @@ class NetworkSpeedMeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                     ?: "Network speed monitor"
                 val content = args?.get("notificationContent") as? String
                     ?: "Monitoring traffic..."
-                startMonitoringInternal(
-                    intervalMs = interval,
-                    foreground = foreground,
-                    showNotification = showNotification,
-                    notificationTitle = title,
-                    notificationContent = content,
-                )
-                result.success(null)
+                try {
+                    startMonitoringInternal(
+                        intervalMs = interval,
+                        foreground = foreground,
+                        showNotification = showNotification,
+                        notificationTitle = title,
+                        notificationContent = content,
+                    )
+                    result.success(null)
+                } catch (throwable: Throwable) {
+                    result.error(
+                        "start_monitoring_failed",
+                        throwable.message ?: "Failed to start monitoring",
+                        null,
+                    )
+                }
             }
             "stopMonitoring" -> {
                 stopMonitoringInternal()
@@ -95,40 +103,49 @@ class NetworkSpeedMeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         stopMonitoringInternal()
         if (foreground) {
             registerServiceReceiver()
-            val intent = Intent(context, NetworkSpeedForegroundService::class.java).apply {
-                action = NetworkSpeedForegroundService.ACTION_START
-                putExtra(NetworkSpeedForegroundService.EXTRA_INTERVAL_MS, intervalMs)
-                putExtra(
-                    NetworkSpeedForegroundService.EXTRA_SHOW_NOTIFICATION,
-                    showNotification,
-                )
-                putExtra(
-                    NetworkSpeedForegroundService.EXTRA_NOTIFICATION_TITLE,
-                    notificationTitle,
-                )
-                putExtra(
-                    NetworkSpeedForegroundService.EXTRA_NOTIFICATION_CONTENT,
-                    notificationContent,
-                )
+            try {
+                val intent = Intent(context, NetworkSpeedForegroundService::class.java).apply {
+                    action = NetworkSpeedForegroundService.ACTION_START
+                    putExtra(NetworkSpeedForegroundService.EXTRA_INTERVAL_MS, intervalMs)
+                    putExtra(
+                        NetworkSpeedForegroundService.EXTRA_SHOW_NOTIFICATION,
+                        showNotification,
+                    )
+                    putExtra(
+                        NetworkSpeedForegroundService.EXTRA_NOTIFICATION_TITLE,
+                        notificationTitle,
+                    )
+                    putExtra(
+                        NetworkSpeedForegroundService.EXTRA_NOTIFICATION_CONTENT,
+                        notificationContent,
+                    )
+                }
+                ContextCompat.startForegroundService(context, intent)
+            } catch (_: Throwable) {
+                unregisterServiceReceiver()
+                startInAppMonitor(intervalMs)
             }
-            ContextCompat.startForegroundService(context, intent)
         } else {
-            monitor = TrafficStatsMonitor(scope, fromForeground = false).also { m ->
-                m.start(
-                    intervalMs = intervalMs,
-                    onUpdate = { reading ->
-                        latest = reading
-                        eventSink?.success(reading.toMap())
-                    },
-                    onError = { throwable ->
-                        eventSink?.error(
-                            "traffic_stats_error",
-                            throwable.message,
-                            null,
-                        )
-                    },
-                )
-            }
+            startInAppMonitor(intervalMs)
+        }
+    }
+
+    private fun startInAppMonitor(intervalMs: Long) {
+        monitor = TrafficStatsMonitor(scope, fromForeground = false).also { m ->
+            m.start(
+                intervalMs = intervalMs,
+                onUpdate = { reading ->
+                    latest = reading
+                    eventSink?.success(reading.toMap())
+                },
+                onError = { throwable ->
+                    eventSink?.error(
+                        "traffic_stats_error",
+                        throwable.message,
+                        null,
+                    )
+                },
+            )
         }
     }
 
