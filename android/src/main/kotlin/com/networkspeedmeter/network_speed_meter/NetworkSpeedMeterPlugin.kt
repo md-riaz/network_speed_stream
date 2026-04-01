@@ -6,6 +6,7 @@ import android.content.Context.RECEIVER_NOT_EXPORTED
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
@@ -62,10 +63,12 @@ class NetworkSpeedMeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                         notificationContent = content,
                     )
                     result.success(null)
-                } catch (throwable: Throwable) {
+                } catch (exception: Exception) {
+                    val details = exception.message
+                        ?: "${exception::class.java.simpleName} while starting monitor"
                     result.error(
                         "start_monitoring_failed",
-                        throwable.message ?: "Failed to start monitoring",
+                        "Failed to start monitoring (${if (foreground) "foreground" else "in-app"} mode): $details",
                         null,
                     )
                 }
@@ -121,7 +124,12 @@ class NetworkSpeedMeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                     )
                 }
                 ContextCompat.startForegroundService(context, intent)
-            } catch (_: Throwable) {
+            } catch (exception: Exception) {
+                Log.w(
+                    "NetworkSpeedMeterPlugin",
+                    "Foreground service start failed; falling back to in-app monitor (monitoring may stop when the app is moved to the background).",
+                    exception,
+                )
                 unregisterServiceReceiver()
                 startInAppMonitor(intervalMs)
             }
